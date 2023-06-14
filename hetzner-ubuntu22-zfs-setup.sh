@@ -104,8 +104,8 @@ function display_intro_banner {
   print_step_info_header
 
   local dialog_message='Hello!
-This script will prepare the ZFS pools, then install and configure minimal Ubuntu 20 LTS with ZFS root on Hetzner hosting VPS instance
-The script with minimal changes may be used on any other hosting provider  supporting KVM virtualization and offering Debian-based rescue system.
+This script will prepare the ZFS pools, then install and configure minimal Ubuntu 22 LTS with ZFS root on Hetzner hosting VPS instance
+The script with minimal changes may be used on any other hosting provider supporting KVM virtualization and offering Debian-based rescue system.
 In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no ones), or Ctrl+C while any operation is running.
 '
   dialog --msgbox "$dialog_message" 30 100
@@ -132,6 +132,13 @@ function check_prerequisites {
   if ! dpkg-query --showformat="\${Status}" -W dialog 2> /dev/null | grep -q "install ok installed"; then
     apt install --yes dialog
   fi
+
+  mdadm --stop --scan
+
+  apt-get update
+  apt-get -y upgrade
+
+  which zfs || (wget https://gist.githubusercontent.com/tijszwinkels/966ec9b38b190bf80c2b2e4cfddf252a/raw/6d42ae592a49deb141ed4c42e6973eec5f4247f8/zfs -O /usr/local/bin/zfs && chmod +x /usr/local/bin/zfs)
 }
 
 
@@ -238,7 +245,7 @@ function ask_free_tail_space {
   local tail_space_invalid_message=
 
   while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
-    v_free_tail_space=$(dialog --inputbox "${tail_space_invalid_message}Enter the space to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
+    v_free_tail_space=$(dialog --inputbox "${tail_space_invalid_message}Enter the space to leave at the end of each disk (in GB, 0 for none):" 30 100 0 3>&1 1>&2 2>&3)
 
     tail_space_invalid_message="Invalid size! "
   done
@@ -463,7 +470,7 @@ echo "======= installing zfs on rescue system =========="
   apt-get install --yes software-properties-common
   gpg --keyid-format long --keyserver hkp://keyserver.ubuntu.com --recv-keys 0x871920D1991BC93C
   gpg --export 871920D1991BC93C > /usr/share/keyrings/ubuntu-archive-keyring.gpg
-  apt --only-upgrade -t bullseye-backports install debootstrap
+  apt --only-upgrade -t bullseye-backports install debootstrap || apt --only-upgrade install debootstrap
   echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
   echo "y" | zfs
   zfs --version
@@ -711,7 +718,7 @@ DKMS'
 echo "======= installing OpenSSH and network tooling =========="
 chroot_execute "apt install --yes openssh-server net-tools"
 
-echo "======= setup OpenSSH  =========="
+echo "======= setup OpenSSH =========="
 mkdir -p "$c_zfs_mount_dir/root/.ssh/"
 cp /root/.ssh/authorized_keys "$c_zfs_mount_dir/root/.ssh/authorized_keys"
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' "$c_zfs_mount_dir/etc/ssh/sshd_config"
